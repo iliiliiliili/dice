@@ -1,0 +1,6 @@
+data
+datasets
+*.pyc
+__pycache__
+output
+.vscode

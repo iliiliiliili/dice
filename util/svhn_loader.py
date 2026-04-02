@@ -92,7 +92,7 @@ class SVHN(data.Dataset):
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        return img, target.astype(np.long)
+        return img, target.astype(np.int64)
 
     def __len__(self):
         if self.split == "test":
@@ -128,3 +128,10 @@ class SVHN(data.Dataset):
         else:
             md5 = self.split_list[self.split][2]
             download_url(self.url, self.root, self.filename, md5)
+
+
+if __name__ == "__main__":
+    dataset = SVHN(root="./data", split="train_and_extra", download=True)
+    print(len(dataset))
+    dataset = SVHN(root="./datasets/ood_datasets/svhn", split="test", download=True)
+    print(len(dataset))

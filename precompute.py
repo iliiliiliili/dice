@@ -80,7 +80,7 @@ if args.dataset in {'CIFAR-10', 'CIFAR-100'}:
             score_log[start_ind:end_ind] = score.data.cpu().numpy()
             if batch_idx % 10 == 0:
                 print(batch_idx)
-        np.save(cache_name, (feat_log.T, score_log.T, label_log))
+        # np.save(cache_name, (feat_log.T, score_log.T, label_log))
     else:
         feat_log, score_log, label_log = np.load(cache_name, allow_pickle=True)
         feat_log, score_log = feat_log.T, score_log.T

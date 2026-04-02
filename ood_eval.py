@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as transforms
 from sklearn.linear_model import LogisticRegressionCV
+from tqdm import tqdm
 import models.densenet as dn
 import util.svhn_loader as svhn
 import numpy as np
@@ -56,6 +57,8 @@ parser.add_argument('--depth', default=40, type=int,
                     help='depth of resnet')
 parser.add_argument('--width', default=4, type=int,
                     help='width of resnet')
+parser.add_argument('--ignore_existing', default=False, type=int,
+                    help='whether to ignore existing files and overwrite')
 
 parser.set_defaults(argument=True)
 
@@ -77,7 +80,7 @@ def eval_ood_detector(args, mode_args):
     name = args.name
     epochs = args.epochs
 
-    in_save_dir = os.path.join(base_dir, in_dataset, method, name, 'nat')
+    in_save_dir = os.path.join(base_dir, in_dataset, method, name, f"p={args.p}", 'nat')
     if not os.path.exists(in_save_dir):
         os.makedirs(in_save_dir)
 
@@ -130,49 +133,54 @@ def eval_ood_detector(args, mode_args):
     else:
         assert False, 'Not supported model arch: {}'.format(args.model_arch)
 
-
-
     model.eval()
     model.cuda()
 
     if not mode_args['out_dist_only']:
         t0 = time.time()
 
-        f1 = open(os.path.join(in_save_dir, "in_scores.txt"), 'w')
-        g1 = open(os.path.join(in_save_dir, "in_labels.txt"), 'w')
+        in_scores_file = os.path.join(in_save_dir, "in_scores.txt")
+        in_labels_file = os.path.join(in_save_dir, "in_labels.txt")
 
-    ########################################In-distribution###########################################
-        print("Processing in-distribution images")
+        if os.path.exists(in_scores_file) and os.path.exists(in_labels_file) and not args.ignore_existing:
+            print("In-distribution scores and labels already exist, skipping...")
+        else:
 
-        N = len(testloaderIn.dataset)
-        count = 0
-        for j, data in enumerate(testloaderIn):
-            images, labels = data
-            images = images.cuda()
-            labels = labels.cuda()
-            curr_batch_size = images.shape[0]
+            f1 = open(os.path.join(in_save_dir, "in_scores.txt"), 'w')
+            g1 = open(os.path.join(in_save_dir, "in_labels.txt"), 'w')
 
-            inputs = images
+            ########################################In-distribution###########################################
+            print("Processing in-distribution images")
 
-            scores = get_score(inputs, model, method, method_args)
+            N = len(testloaderIn.dataset)
+            count = 0
+            for j, data in enumerate(testloaderIn):
+                images, labels = data
+                images = images.cuda()
+                labels = labels.cuda()
+                curr_batch_size = images.shape[0]
 
-            for score in scores:
-                f1.write("{}\n".format(score))
+                inputs = images
 
-            outputs = F.softmax(model(inputs)[:, :num_classes], dim=1)
-            outputs = outputs.detach().cpu().numpy()
-            preds = np.argmax(outputs, axis=1)
-            confs = np.max(outputs, axis=1)
+                scores = get_score(inputs, model, method, method_args)
 
-            for k in range(preds.shape[0]):
-                g1.write("{} {} {}\n".format(labels[k], preds[k], confs[k]))
+                for score in scores:
+                    f1.write("{}\n".format(score))
 
-            count += curr_batch_size
-            # print("{:4}/{:4} images processed, {:.1f} seconds used.".format(count, N, time.time()-t0))
-            t0 = time.time()
+                outputs = F.softmax(model(inputs)[:, :num_classes], dim=1)
+                outputs = outputs.detach().cpu().numpy()
+                preds = np.argmax(outputs, axis=1)
+                confs = np.max(outputs, axis=1)
 
-        f1.close()
-        g1.close()
+                for k in range(preds.shape[0]):
+                    g1.write("{} {} {}\n".format(labels[k], preds[k], confs[k]))
+
+                count += curr_batch_size
+                # print("{:4}/{:4} images processed, {:.1f} seconds used.".format(count, N, time.time()-t0))
+                t0 = time.time()
+
+            f1.close()
+            g1.close()
 
     if mode_args['in_dist_only']:
         return
@@ -184,7 +192,13 @@ def eval_ood_detector(args, mode_args):
         if not os.path.exists(out_save_dir):
             os.makedirs(out_save_dir)
 
-        f2 = open(os.path.join(out_save_dir, "out_scores.txt"), 'w')
+        out_scores_file = os.path.join(out_save_dir, "out_scores.txt")
+
+        if os.path.exists(out_scores_file) and not args.ignore_existing:
+            print(f"Out-of-distribution scores for {out_dataset} already exist, skipping...")
+            continue
+
+        f2 = open(out_scores_file, 'w')
 
         if not os.path.exists(out_save_dir):
             os.makedirs(out_save_dir)
@@ -222,11 +236,11 @@ def eval_ood_detector(args, mode_args):
 
     ###################################Out-of-Distributions#####################################
         t0 = time.time()
-        print("Processing out-of-distribution images")
+        print(f"Processing out-of-distribution images for {out_dataset}")
 
         N = len(testloaderOut.dataset)
         count = 0
-        for j, data in enumerate(testloaderOut):
+        for j, data in tqdm(enumerate(testloaderOut), total=len(testloaderOut)):
 
             images, labels = data
             images = images.cuda()
@@ -259,8 +273,8 @@ if __name__ == '__main__':
     else:
         args.out_datasets = ['SVHN', 'LSUN', 'LSUN_resize', 'iSUN', 'dtd', 'places365']
 
-    if args.method == 'energy':
+    if args.method == 'energy' or args.method == 'odin':
         args.method_args['temperature'] = 1000.0
-        eval_ood_detector(args, mode_args)
 
-    compute_traditional_ood(args.base_dir, args.in_dataset, args.out_datasets, args.method, args.name)
+    eval_ood_detector(args, mode_args)
+    compute_traditional_ood(args.base_dir, args.in_dataset, args.out_datasets, args.method, args.name, p=args.p)

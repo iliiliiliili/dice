@@ -120,32 +120,27 @@ def print_results(results, in_dataset, out_dataset, name, method):
     print(' {val:6.2f}\n'.format(val=100.*results['AUOUT']), end='')
     print('')
 
-    # print(' {val:6.2f}'.format(val=100.*results['FPR']), end='')
-    # print(' {val:6.2f}'.format(val=100.*results['DTERR']), end='')
-    # print(' {val:6.2f}'.format(val=100.*results['AUROC']), end='')
-    # print(' {val:6.2f}'.format(val=100.*results['AUIN']), end='')
-    # print(' {val:6.2f}'.format(val=100.*results['AUOUT']), end='')
 
 
 
-def print_all_results(results, datasets, method):
+def print_all_results(results, datasets, method, file=None):
     mtypes = ['FPR', 'AUROC', 'AUIN']
     avg_results = compute_average_results(results)
-    print(' OOD detection method: ' + method)
-    print('             ', end='')
+    print(' OOD detection method: ' + method, file=file)
+    print('             ', end='', file=file)
     for mtype in mtypes:
-        print(' {mtype:6s}'.format(mtype=mtype), end='')
+        print(' {mtype:6s}'.format(mtype=mtype), end='', file=file)
     for result, dataset in zip(results,datasets):
-        print('\n{dataset:12s}'.format(dataset=dataset), end='')
-        print(' {val:6.2f}'.format(val=100.*result['FPR']), end='')
-        print(' {val:6.2f}'.format(val=100.*result['AUROC']), end='')
-        print(' {val:6.2f}'.format(val=100.*result['AUIN']), end='')
+        print('\n{dataset:12s}'.format(dataset=dataset), end='', file=file)
+        print(' {val:6.2f}'.format(val=100.*result['FPR']), end='', file=file)
+        print(' {val:6.2f}'.format(val=100.*result['AUROC']), end='', file=file)
+        print(' {val:6.2f}'.format(val=100.*result['AUIN']), end='', file=file)
 
-    print('\nAVG         ', end='')
-    print(' {val:6.2f}'.format(val=100.*avg_results['FPR']), end='')
-    print(' {val:6.2f}'.format(val=100.*avg_results['AUROC']), end='')
-    print(' {val:6.2f}'.format(val=100.*avg_results['AUIN']), end='')
-    print('')
+    print('\nAVG         ', end='', file=file)
+    print(' {val:6.2f}'.format(val=100.*avg_results['FPR']), end='', file=file)
+    print(' {val:6.2f}'.format(val=100.*avg_results['AUROC']), end='', file=file)
+    print(' {val:6.2f}'.format(val=100.*avg_results['AUIN']), end='', file=file)
+    print('', file=file)
 
 def compute_average_results(all_results):
     mtypes = ['FPR', 'DTERR', 'AUROC', 'AUIN', 'AUOUT']
@@ -163,28 +158,19 @@ def compute_average_results(all_results):
 
     return avg_results
 
-def compute_traditional_ood(base_dir, in_dataset, out_datasets, method, name):
+def compute_traditional_ood(base_dir, in_dataset, out_datasets, method, name, p):
     # print('Natural OOD')
     # print('nat_in vs. nat_out')
 
-    known = np.loadtxt('{base_dir}/{in_dataset}/{method}/{name}/nat/in_scores.txt'.format(base_dir=base_dir, in_dataset=in_dataset, method=method, name=name), delimiter='\n')
-
-    known_sorted = np.sort(known)
-    num_k = known.shape[0]
-
-    if method == 'rowl':
-        threshold = -0.5
-    else:
-        threshold = known_sorted[round(0.05 * num_k)]
+    known = np.loadtxt('{base_dir}/{in_dataset}/{method}/{name}/p={p}/nat/in_scores.txt'.format(base_dir=base_dir, in_dataset=in_dataset, method=method, name=name, p=p))
 
     all_results = []
 
     total = 0.0
 
     for out_dataset in out_datasets:
-        novel = np.loadtxt('{base_dir}/{in_dataset}/{method}/{name}/nat/{out_dataset}/out_scores.txt'.format(base_dir=base_dir, in_dataset=in_dataset, method=method, name=name, out_dataset=out_dataset), delimiter='\n')
+        novel = np.loadtxt('{base_dir}/{in_dataset}/{method}/{name}/p={p}/nat/{out_dataset}/out_scores.txt'.format(base_dir=base_dir, in_dataset=in_dataset, method=method, name=name, p=p, out_dataset=out_dataset))
 
-        in_cond = (novel>threshold).astype(np.float32)
         total += novel.shape[0]
 
         results = cal_metric(known, novel, method)
@@ -192,31 +178,28 @@ def compute_traditional_ood(base_dir, in_dataset, out_datasets, method, name):
         all_results.append(results)
 
     print_all_results(all_results, out_datasets, method)
-    # avg_results = compute_average_results(all_results)
-    # print_results(avg_results, in_dataset, "All", name, method)
+    print_all_results(all_results, out_datasets, method, file=open('{base_dir}/ood_results_{in_dataset}_{method}_{name}_p={p}.txt'.format(base_dir=base_dir, in_dataset=in_dataset, method=method, name=name, p=p), 'w'))
 
 
-def compute_stat(base_dir, in_dataset, out_datasets, method, name):
-    # print('Natural OOD')
-    # print('nat_in vs. nat_out')
+def compute_stat(base_dir, in_dataset, out_datasets, method, name, p):
 
-    known = np.loadtxt('{base_dir}/{in_dataset}/{method}/{name}/nat/in_scores.txt'.format(base_dir=base_dir, in_dataset=in_dataset, method=method, name=name), delimiter='\n')
+    known = np.loadtxt('{base_dir}/{in_dataset}/{method}/{name}/p={p}/nat/in_scores.txt'.format(base_dir=base_dir, in_dataset=in_dataset, method=method, name=name, p=p))
 
     print(f"ID mean: {known.mean()} std: {known.std()}")
 
     all_mean = []
     all_std = []
     for out_dataset in out_datasets:
-        novel = np.loadtxt('{base_dir}/{in_dataset}/{method}/{name}/nat/{out_dataset}/out_scores.txt'.format(base_dir=base_dir, in_dataset=in_dataset, method=method, name=name, out_dataset=out_dataset), delimiter='\n')
+        novel = np.loadtxt('{base_dir}/{in_dataset}/{method}/{name}/p={p}/nat/{out_dataset}/out_scores.txt'.format(base_dir=base_dir, in_dataset=in_dataset, method=method, name=name, p=p, out_dataset=out_dataset))
         all_mean.append(novel.mean())
         all_std.append(novel.std())
 
     print(f"OOD mean: {sum(all_mean) / len(out_datasets)} std: {sum(all_std) / len(out_datasets)}")
     return
 
-def compute_in(base_dir, in_dataset, method, name):
+def compute_in(base_dir, in_dataset, method, name, p):
 
-    known_nat = np.loadtxt('{base_dir}/{in_dataset}/{method}/{name}/nat/in_scores.txt'.format(base_dir=base_dir, in_dataset=in_dataset, method=method, name=name), delimiter='\n')
+    known_nat = np.loadtxt('{base_dir}/{in_dataset}/{method}/{name}/p={p}/nat/in_scores.txt'.format(base_dir=base_dir, in_dataset=in_dataset, method=method, name=name, p=p))
     known_nat_sorted = np.sort(known_nat)
     num_k = known_nat.shape[0]
 
@@ -225,7 +208,7 @@ def compute_in(base_dir, in_dataset, method, name):
     else:
         threshold = known_nat_sorted[round(0.05 * num_k)]
 
-    known_nat_label = np.loadtxt('{base_dir}/{in_dataset}/{method}/{name}/nat/in_labels.txt'.format(base_dir=base_dir, in_dataset=in_dataset, method=method, name=name))
+    known_nat_label = np.loadtxt('{base_dir}/{in_dataset}/{method}/{name}/p={p}/nat/in_labels.txt'.format(base_dir=base_dir, in_dataset=in_dataset, method=method, name=name, p=p))
 
     nat_in_cond = (known_nat>threshold).astype(np.float32)
     nat_correct = (known_nat_label[:,0] == known_nat_label[:,1]).astype(np.float32)
@@ -236,8 +219,6 @@ def compute_in(base_dir, in_dataset, method, name):
     known_nat_fnr = np.mean((1.0 - nat_in_cond))
     known_nat_eteacc = np.mean(nat_correct * nat_in_cond)
 
-    # print('In-distribution performance:')
-    # print('FNR: {fnr:6.2f}, Acc: {acc:6.2f}, End-to-end Acc: {eteacc:6.2f}'.format(fnr=known_nat_fnr*100,acc=known_nat_acc*100,eteacc=known_nat_eteacc*100))
     print('\t{acc:6.2f}, {eteacc:6.2f}'.format(fnr=known_nat_fnr*100,acc=known_nat_acc*100,eteacc=known_nat_eteacc*100))
 
     return
